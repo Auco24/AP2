@@ -5,34 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AP2 Trainer – FIAE</title>
   <meta name="description" content="Prüfungsvorbereitung AP2 Fachinformatiker Anwendungsentwicklung">
-  <meta name="theme-color" content="#2b59c3">
+  <meta name="theme-color" content="#4f46e5">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css">
   <script>
     try { var t = localStorage.getItem('ap2.theme'); if (t) document.documentElement.setAttribute('data-theme', JSON.parse(t)); } catch (e) {}
   </script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="#/">
-      <img src="icons/icon.svg" alt="" width="28" height="28">
-      <span>AP2 Trainer <small>FIAE</small></span>
-    </a>
-    <nav class="topnav">
-      <a href="#/" data-nav="home">Start</a>
-      <a href="#/statistik" data-nav="statistik">Statistik</a>
-      <a href="#/daten" data-nav="daten">Daten</a>
-      <button id="themeToggle" class="icon-btn" title="Hell/Dunkel umschalten" aria-label="Design umschalten">🌓</button>
-    </nav>
-  </header>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation">
+      <a class="brand" href="#/">
+        <img src="icons/icon.svg" alt="" width="34" height="34">
+        <span class="brand-text"><strong>AP2 Trainer</strong><small>Fachinformatiker AE</small></span>
+      </a>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot">
+        <button id="themeToggle" class="nav-item theme-btn" type="button" aria-label="Design umschalten">
+          <span class="ico" data-icon="moon"></span><span class="nav-label">Dunkles Design</span>
+        </button>
+      </div>
+    </aside>
 
-  <main id="app" class="container" aria-live="polite"></main>
-
-  <footer class="footer container">
-    Eigene Übungsaufgaben im Stil der AP2 – keine Original-IHK-Aufgaben. Fortschritt wird nur lokal im Browser gespeichert.
-  </footer>
+    <div class="main-col">
+      <main id="app" class="content" aria-live="polite"></main>
+      <footer class="footer">
+        Übungsaufgaben im Stil der AP2. Fortschritt wird nur lokal auf diesem Gerät gespeichert.
+      </footer>
+    </div>
+  </div>
 
   <!-- Daten -->
   <script src="data/categories.js"></script>
@@ -42,6 +46,7 @@
   <!-- Aufgaben aus eigenen IHK-Prüfungsunterlagen (lokal, nicht im Git) -->
   <script src="data/ihk/ihk-aufgaben.js"></script>
   <!-- App -->
+  <script src="js/icons.js"></script>
   <script src="js/markdown.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -1,0 +1,42 @@
+{
+  "name": "ap2-trainer",
+  "productName": "AP2 Trainer",
+  "version": "1.0.0",
+  "description": "Prüfungsvorbereitung AP2 Fachinformatiker Anwendungsentwicklung",
+  "author": "AP2 Trainer",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "node prepare.js && electron .",
+    "build:win": "node prepare.js && electron-builder --win nsis --x64 --publish never && electron-builder --win portable --x64 --publish never",
+    "build:mac": "node prepare.js && electron-builder --mac",
+    "build:linux": "node prepare.js && electron-builder --linux AppImage"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "de.ap2trainer.app",
+    "productName": "AP2 Trainer",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "app/**/*"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AP2 Trainer",
+      "artifactName": "AP2-Trainer-Setup-${version}.${ext}"
+    },
+    "portable": { "artifactName": "AP2-Trainer-Portable-${version}.${ext}" },
+    "mac": { "target": "dmg", "icon": "build/icon.png", "category": "public.app-category.education" },
+    "linux": { "target": "AppImage", "icon": "build/icon.png", "category": "Education" }
+  }
+}

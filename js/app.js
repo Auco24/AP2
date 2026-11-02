@@ -127,6 +127,34 @@
       '<span class="b-part" style="width:' + w(s.partial) + '%"></span>' +
       '<span class="b-bad" style="width:' + w(s.wrong) + '%"></span></div>';
   }
+  var CAT_ICON = { ga1: 'plan', ga2: 'code', wiso: 'scale' };
+  function catClass(id) { return 'c-' + (CAT_ICON[id] ? id : 'x'); }
+  function ring(pct, size, cls) {
+    size = size || 48;
+    var sw = size > 60 ? 7 : 5, r = (size - sw) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
+    return '<span class="ring ' + (cls || '') + '" style="width:' + size + 'px;height:' + size + 'px"><svg viewBox="0 0 ' + size + ' ' + size + '">' +
+      '<circle class="ring-bg" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + sw + '"/>' +
+      '<circle class="ring-fg" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" stroke-width="' + sw + '" stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + off.toFixed(2) + '"/></svg>' +
+      '<b style="font-size:' + Math.round(size / 4.2) + 'px">' + pct + '%</b></span>';
+  }
+
+  function renderNav(r, parts) {
+    var nav = document.getElementById('nav');
+    if (!nav) return;
+    var item = function (href, icon, label, active, extra, cls) {
+      return '<a class="nav-item' + (active ? ' active' : '') + (cls ? ' ' + cls : '') + '" href="' + href + '"><span class="ico">' + ICON(icon) + '</span><span class="nav-label">' + label + '</span>' + (extra || '') + '</a>';
+    };
+    var cur = (r === 'k' || r === 't') ? parts[1] : null;
+    var h = item('#/', 'home', 'Übersicht', !r) + '<div class="nav-sec">Prüfungsbereiche</div>';
+    CATS.forEach(function (c) {
+      h += item('#/k/' + c.id, CAT_ICON[c.id] || 'book', c.short.replace(/^(GA\d) – /, '$1 · '), cur === c.id, '<span class="nav-pct">' + stats(tasksOf(c.id)).pct + '%</span>', catClass(c.id));
+    });
+    h += '<div class="nav-sec">Werkzeuge</div>';
+    if (EXAMS.length) h += item('#/pruefungen', 'file', 'IHK-Prüfungen', r === 'pruefungen');
+    h += item('#/statistik', 'chart', 'Statistik', r === 'statistik') + item('#/daten', 'data', 'Daten & Import', r === 'daten');
+    nav.innerHTML = h;
+  }
+
   function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
   function ihkNote(pct) {
     if (pct >= 92) return { n: 1, t: 'sehr gut' };
@@ -218,13 +246,13 @@
     clearInterval(timerHandle);
     var parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     var r = parts[0] || '';
-    document.querySelectorAll('[data-nav]').forEach(function (a) {
-      a.classList.toggle('active', a.getAttribute('data-nav') === (r || 'home'));
-    });
+    renderNav(r, parts);
+    document.body.classList.toggle('in-session', r === 'session');
     if (r === 'k' && cat(parts[1])) viewCategory(parts[1]);
     else if (r === 't' && cat(parts[1])) viewTopicList(parts[1], parts[2]);
     else if (r === 'session' && session) (session.finished ? viewResult() : viewSession());
     else if (r === 'ergebnis' && session) viewResult();
+    else if (r === 'pruefungen') viewExams();
     else if (r === 'statistik') viewStats();
     else if (r === 'daten') viewData();
     else viewHome();
@@ -236,66 +264,61 @@
     var all = stats(TASKS);
     var p = progress();
     var wrongIds = TASKS.filter(function (t) { return p[t.id] && p[t.id].s !== 'correct'; }).map(function (t) { return t.id; });
+    var newCount = TASKS.filter(function (t) { return !p[t.id]; }).length;
     var running = session && !session.finished;
+    var done = all.total - all.open;
+    var quote = done ? Math.round(all.correct / done * 100) : 0;
+    var hour = new Date().getHours();
+    var greet = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Hallo' : 'Guten Abend';
 
-    var html = '<section class="hero">' +
-      '<div><h1>AP2 Prüfungsvorbereitung</h1><p class="muted">Fachinformatiker/-in Anwendungsentwicklung · ' + TASKS.length + ' Aufgaben in ' + CATS.length + ' Prüfungsbereichen</p></div>' +
-      '<div class="hero-stat"><div class="big">' + all.pct + '%</div><div class="muted small">Gesamtfortschritt</div>' + bar(all) + '</div>' +
+    var html = '<header class="page-head"><div><p class="eyebrow">' + esc(new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })) + '</p>' +
+      '<h1>' + greet + '! Bereit für die AP2?</h1><p class="muted">Fachinformatiker/-in Anwendungsentwicklung · ' + TASKS.length + ' Aufgaben</p></div>' +
+      '<div class="head-tools">' + srcSelect() + '</div></header>';
+
+    html += '<section class="kpis">' +
+      '<div class="card kpi kpi-main">' + ring(all.pct, 76, 'accent') + '<div><div class="kpi-label">Gesamtfortschritt</div><div class="kpi-sub">' + all.correct + ' von ' + all.total + ' sicher gelöst</div>' + bar(all) + '</div></div>' +
+      kpi('layers', 'Bearbeitet', done, 'von ' + all.total) +
+      kpi('target', 'Trefferquote', quote + '%', done ? 'der bearbeiteten Aufgaben' : 'noch keine Daten') +
+      kpi('repeat', 'Zu wiederholen', all.wrong + all.partial, 'falsch oder teilweise') +
       '</section>';
 
     if (running) {
-      var done = session.ids.filter(function (id) { return session.answers[id] && session.answers[id].checked; }).length;
-      html += '<div class="notice"><span>Laufende Sitzung: <strong>' + esc(session.title) + '</strong> (' + done + '/' + session.ids.length + ')</span>' +
-        '<span class="row"><a class="btn" href="#/session">Fortsetzen</a><button class="btn ghost" data-act="drop">Verwerfen</button></span></div>';
+      var sd = session.ids.filter(function (id) { return session.answers[id] && session.answers[id].checked; }).length;
+      var sp = Math.round(sd / session.ids.length * 100);
+      html += '<div class="card resume"><div class="resume-ico">' + ICON(session.mode === 'exam' ? 'timer' : 'play') + '</div>' +
+        '<div class="resume-body"><div class="kpi-label">Weitermachen</div><strong>' + esc(session.title) + '</strong>' +
+        '<div class="mini-bar"><span style="width:' + sp + '%"></span></div><span class="muted small">' + sd + ' / ' + session.ids.length + ' Aufgaben</span></div>' +
+        '<div class="row"><button class="btn ghost" data-act="drop">Verwerfen</button><a class="btn primary" href="#/session">Fortsetzen ' + ICON('arrowRight') + '</a></div></div>';
     }
 
-    html += '<div class="quick">' + srcSelect() +
-      '<button class="btn" data-act="mix">🎲 Zufallsmix (10)</button>' +
-      '<button class="btn" data-act="wrong"' + (wrongIds.length ? '' : ' disabled') + '>🔁 Fehler wiederholen (' + wrongIds.length + ')</button>' +
-      '<button class="btn" data-act="open">🆕 Nur neue Aufgaben</button>' +
-      '</div>';
+    html += '<section class="actions-grid">' +
+      action('mix', 'shuffle', 'Zufallsmix', '10 gemischte Aufgaben aus allen Bereichen', false) +
+      action('wrong', 'repeat', 'Fehler wiederholen', wrongIds.length ? wrongIds.length + ' Aufgaben warten auf dich' : 'Aktuell nichts zu wiederholen', !wrongIds.length) +
+      action('open', 'sparkle', 'Neue Aufgaben', newCount ? newCount + ' noch nicht bearbeitet' : 'Alles einmal bearbeitet', !newCount) +
+      '</section>';
 
-    html += '<h2>Prüfungsbereiche</h2><div class="grid">';
+    html += '<div class="section-head"><h2>Prüfungsbereiche</h2></div><div class="grid cats">';
     CATS.forEach(function (c) {
       var s = stats(tasksOf(c.id));
-      html += '<a class="card cat-card" href="#/k/' + c.id + '">' +
-        '<div class="cat-icon">' + c.icon + '</div>' +
+      html += '<a class="card cat-card ' + catClass(c.id) + '" href="#/k/' + c.id + '">' +
+        '<div class="cat-top"><span class="cat-ico">' + ICON(CAT_ICON[c.id] || 'book') + '</span>' + ring(s.pct, 48) + '</div>' +
         '<h3>' + esc(c.name) + '</h3><p class="muted small">' + esc(c.description) + '</p>' +
-        '<div class="meta"><span>' + s.total + ' Aufgaben · ' + c.topics.length + ' Themen</span><span>' + s.pct + '%</span></div>' + bar(s) +
-        '</a>';
+        '<div class="cat-foot"><span>' + s.total + ' Aufgaben · ' + c.topics.length + ' Themen</span><span class="go">' + ICON('arrowRight') + '</span></div>' +
+        bar(s) + '</a>';
     });
     html += '</div>';
 
     if (EXAMS.length) {
-      html += '<h2>IHK-Prüfungen nach Termin</h2><p class="muted small">Aufgaben in Originalreihenfolge üben oder als Prüfung mit Zeitlimit simulieren. Alle Aufgaben sind zusätzlich den Themen oben zugeordnet.</p><div class="grid exams">';
-      EXAMS.forEach(function (e) {
+      html += '<div class="section-head"><h2>Was kommt in der Prüfung dran?</h2><a class="link" href="#/statistik">Mehr Statistik ' + ICON('chevronRight') + '</a></div>';
+      html += '<div class="card relevance">' + relevanceList(8) + '</div>';
+      html += '<div class="section-head"><h2>IHK-Prüfungen</h2><a class="link" href="#/pruefungen">Alle Termine ' + ICON('chevronRight') + '</a></div>';
+      html += '<div class="exam-strip">' + EXAMS.map(function (e) {
         var s = stats(examTasks(e.id));
-        html += '<div class="card exam-card"><div class="row space"><h3>📄 ' + esc(e.name) + '</h3><span class="muted small">' + s.pct + '%</span></div>' + bar(s) + '<div class="exam-parts">';
-        CATS.forEach(function (c) {
-          var list = examTasks(e.id, c.id);
-          if (!list.length) return;
-          var cs = stats(list);
-          html += '<div class="exam-part"><span><strong>' + esc(c.short) + '</strong> <span class="muted small">' + list.length + ' Aufg. · ' + cs.pct + '%</span></span>' +
-            '<span class="row"><button class="btn small-btn" data-ex="' + e.id + '" data-excat="' + c.id + '">Üben</button>' +
-            '<button class="btn ghost small-btn" data-ex="' + e.id + '" data-excat="' + c.id + '" data-exmode="exam" title="Prüfungssimulation mit Zeitlimit">⏱ ' + (c.examMinutes) + ' min</button></span></div>';
-        });
-        html += '</div>' + (e.note ? '<p class="muted small">' + esc(e.note) + '</p>' : '') + '</div>';
-      });
-      html += '</div>';
+        return '<a class="card exam-chip" href="#/pruefungen">' + ring(s.pct, 40) + '<div><strong>' + esc(e.name) + '</strong><span class="muted small">' + examTasks(e.id).length + ' Aufgaben</span></div></a>';
+      }).join('') + '</div>';
     }
     app.innerHTML = html;
     bindSrc();
-    app.querySelectorAll('[data-ex]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var e = exam(b.getAttribute('data-ex')), c = cat(b.getAttribute('data-excat'));
-        var isExam = b.getAttribute('data-exmode') === 'exam';
-        startSession({
-          ids: examTasks(e.id, c.id).map(function (t) { return t.id; }),
-          mode: isExam ? 'exam' : 'practice', duration: isExam ? c.examMinutes * 60 : 0,
-          title: e.name + ' · ' + c.short, back: '#/'
-        });
-      });
-    });
 
     on('[data-act="drop"]', function () { if (confirm('Laufende Sitzung verwerfen?')) { session = null; store.del(K.session); route(); } });
     on('[data-act="mix"]', function () {
@@ -308,26 +331,88 @@
     });
   }
 
+  function kpi(icon, label, value, sub) {
+    return '<div class="card kpi"><span class="kpi-ico">' + ICON(icon) + '</span><div><div class="kpi-label">' + label + '</div><div class="kpi-value">' + value + '</div><div class="kpi-sub">' + sub + '</div></div></div>';
+  }
+  function action(act, icon, title, sub, disabled) {
+    return '<button class="card action" data-act="' + act + '"' + (disabled ? ' disabled' : '') + '><span class="action-ico">' + ICON(icon) + '</span><span class="action-text"><strong>' + title + '</strong><span>' + sub + '</span></span>' + ICON('chevronRight', 'chev') + '</button>';
+  }
+
+  /* Prüfungsrelevanz: Anteil der IHK-Punkte je Thema über alle Termine */
+  function relevance() {
+    var map = {}, total = 0;
+    (window.AP2_IHK_TASKS || []).forEach(function (t) {
+      var key = (t.tcat || t.cat) + '/' + t.topic;
+      map[key] = (map[key] || 0) + (t.points || 0);
+      total += t.points || 0;
+    });
+    return Object.keys(map).map(function (k) {
+      var parts = k.split('/'), tp = topic(parts[0], parts[1]) || { name: parts[1] };
+      return { cat: parts[0], topic: parts[1], name: tp.name, points: map[k], share: total ? map[k] / total * 100 : 0 };
+    }).sort(function (a, b) { return b.points - a.points; });
+  }
+  function relevanceList(limit) {
+    var rows = relevance().slice(0, limit || 99);
+    var max = rows.length ? rows[0].share : 1;
+    return '<p class="muted small rel-note">Anteil der Prüfungspunkte je Thema über ' + EXAMS.length + ' IHK-Termine. Klick öffnet das Thema.</p><ol class="rel-list">' + rows.map(function (r) {
+      var c = cat(r.cat);
+      return '<li><a href="#/t/' + r.cat + '/' + encodeURIComponent(r.topic) + '"><span class="rel-name">' + esc(r.name) + ' <span class="tag ' + catClass(r.cat) + '">' + esc(c ? c.short.split(' ')[0] : r.cat) + '</span></span>' +
+        '<span class="rel-bar"><span class="' + catClass(r.cat) + '" style="width:' + (r.share / max * 100) + '%"></span></span><span class="rel-val">' + r.share.toFixed(1).replace('.', ',') + ' %</span></a></li>';
+    }).join('') + '</ol>';
+  }
+
+  function viewExams() {
+    var html = '<header class="page-head"><div><p class="eyebrow">Originalprüfungen</p><h1>IHK-Prüfungen nach Termin</h1>' +
+      '<p class="muted">In Originalreihenfolge üben oder als Prüfung mit Zeitlimit simulieren. Alle Aufgaben sind zusätzlich den Themen zugeordnet.</p></div></header>';
+    if (!EXAMS.length) html += '<div class="card empty">Keine IHK-Prüfungen eingebunden.</div>';
+    html += '<div class="grid exams">';
+    EXAMS.forEach(function (e) {
+      var s = stats(examTasks(e.id));
+      html += '<div class="card exam-card"><div class="exam-head">' + ring(s.pct, 52) + '<div><h3>' + esc(e.name) + '</h3><span class="muted small">' + s.total + ' Aufgaben · ' + (s.total - s.open) + ' bearbeitet</span></div></div><div class="exam-parts">';
+      CATS.forEach(function (c) {
+        var list = examTasks(e.id, c.id);
+        if (!list.length) return;
+        var cs = stats(list);
+        html += '<div class="exam-part"><span class="part-ico ' + catClass(c.id) + '">' + ICON(CAT_ICON[c.id]) + '</span><span class="part-name"><strong>' + esc(c.short) + '</strong><span class="muted small">' + list.length + ' Aufgaben · ' + cs.pct + ' %</span></span>' +
+          '<span class="row"><button class="btn sm" data-ex="' + e.id + '" data-excat="' + c.id + '">' + ICON('play') + 'Üben</button>' +
+          '<button class="btn sm ghost" data-ex="' + e.id + '" data-excat="' + c.id + '" data-exmode="exam" title="Prüfungssimulation mit Zeitlimit">' + ICON('timer') + c.examMinutes + ' min</button></span></div>';
+      });
+      html += '</div>' + (e.note ? '<p class="exam-note">' + ICON('info') + esc(e.note) + '</p>' : '') + '</div>';
+    });
+    html += '</div>';
+    app.innerHTML = html;
+    app.querySelectorAll('[data-ex]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var e = exam(b.getAttribute('data-ex')), c = cat(b.getAttribute('data-excat'));
+        var isExam = b.getAttribute('data-exmode') === 'exam';
+        startSession({
+          ids: examTasks(e.id, c.id).map(function (t) { return t.id; }),
+          mode: isExam ? 'exam' : 'practice', duration: isExam ? c.examMinutes * 60 : 0,
+          title: e.name + ' · ' + c.short, back: '#/pruefungen'
+        });
+      });
+    });
+  }
+
   function viewCategory(catId) {
     var c = cat(catId);
     var all = tasksOf(catId);
     var s = stats(all);
-    var html = '<nav class="crumbs"><a href="#/">Start</a> › ' + esc(c.short) + '</nav>' +
-      '<section class="hero"><div><h1>' + c.icon + ' ' + esc(c.name) + '</h1><p class="muted">' + esc(c.description) + '</p></div>' +
-      '<div class="hero-stat"><div class="big">' + s.pct + '%</div><div class="muted small">' + s.total + ' Aufgaben</div>' + bar(s) + '</div></section>';
+    var html = '<nav class="crumbs"><a href="#/">Übersicht</a>' + ICON('chevronRight') + '<span>' + esc(c.short) + '</span></nav>' +
+      '<header class="page-head cat-head ' + catClass(c.id) + '"><span class="cat-ico lg">' + ICON(CAT_ICON[c.id] || 'book') + '</span><div class="grow"><h1>' + esc(c.name) + '</h1><p class="muted">' + esc(c.description) + '</p></div>' +
+      '<div class="head-ring">' + ring(s.pct, 72) + '<span class="muted small">' + s.total + ' Aufgaben</span></div></header>';
 
-    html += '<div class="card exam-box"><div><h3>📝 Prüfungssimulation</h3><p class="muted small">Zufällige Aufgaben aus allen Themen, Lösungen erst am Ende, Bewertung nach IHK-Notenschlüssel.</p></div>' +
+    html += '<div class="card exam-box"><span class="action-ico">' + ICON('timer') + '</span><div class="grow"><h3>Prüfungssimulation</h3><p class="muted small">Zufällige Aufgaben aus allen Themen, Lösungen erst am Ende, Bewertung nach IHK-Notenschlüssel.</p></div>' +
       '<div class="row wrap">' +
-      '<label>Aufgaben <select id="exN">' + [10, 15, 20, 30].map(function (n) { return '<option' + (n === 15 ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
-      '<label>Minuten <select id="exM">' + [20, 30, 45, 60, 90].map(function (n) { return '<option' + (n === Math.min(45, c.examMinutes) ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
-      '<button class="btn primary" data-act="exam">Prüfung starten</button></div></div>';
+      '<label class="field">Aufgaben <select id="exN">' + [10, 15, 20, 30].map(function (n) { return '<option' + (n === 15 ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+      '<label class="field">Minuten <select id="exM">' + [20, 30, 45, 60, 90].map(function (n) { return '<option' + (n === Math.min(45, c.examMinutes) ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+      '<button class="btn primary" data-act="exam">' + ICON('play') + 'Starten</button></div></div>';
 
-    html += '<div class="row space"><h2>Themen</h2>' +
-      '<span class="row wrap">' + srcSelect() + '<label class="small"><input type="checkbox" id="onlyOpen"> nur offene &amp; falsche</label></span></div>';
-    html += '<div class="topic-list">';
+    html += '<div class="section-head"><h2>Themen</h2>' +
+      '<span class="row wrap">' + srcSelect() + '<label class="switch"><input type="checkbox" id="onlyOpen"><span class="slider"></span>nur offene &amp; falsche</label></span></div>';
+    html += '<div class="grid topics ' + catClass(c.id) + '">';
     html += topicRow(c, { id: 'alle', name: 'Alle Themen gemischt' }, all, true);
     c.topics.forEach(function (t) { html += topicRow(c, t, tasksOf(catId, t.id)); });
-    // Themen aus importierten Aufgaben, die nicht in categories.js stehen
     var known = c.topics.map(function (t) { return t.id; });
     var extra = {};
     all.forEach(function (t) { if (known.indexOf(t.topic) < 0) extra[t.topic] = true; });
@@ -350,7 +435,7 @@
           list = list.filter(function (t) { return !p[t.id] || p[t.id].s !== 'correct'; });
         }
         var ids = list.map(function (t) { return t.id; });
-        if (tid === 'alle' || b.hasAttribute('data-shuffle')) ids = shuffle(ids);
+        if (tid === 'alle') ids = shuffle(ids);
         startSession({ ids: ids, title: c.short + ' · ' + topic(catId, tid).name, back: '#/k/' + catId });
       });
     });
@@ -358,12 +443,14 @@
 
   function topicRow(c, t, list, highlight) {
     var s = stats(list);
+    var ihk = list.filter(function (x) { return x.exam; }).length;
     return '<div class="card topic' + (highlight ? ' hl' : '') + '">' +
-      '<div class="topic-main"><h3>' + esc(t.name) + '</h3>' +
-      '<div class="meta small"><span>' + s.total + ' Aufgaben · ' + s.correct + ' richtig · ' + s.wrong + ' falsch · ' + s.open + ' offen</span><span>' + s.pct + '%</span></div>' + bar(s) + '</div>' +
-      '<div class="row">' +
-      (t.id !== 'alle' ? '<a class="btn ghost" href="#/t/' + c.id + '/' + encodeURIComponent(t.id) + '">Liste</a>' : '') +
-      '<button class="btn primary" data-practice="' + esc(t.id) + '"' + (s.total ? '' : ' disabled') + '>Üben</button></div></div>';
+      '<div class="topic-top">' + ring(s.pct, 44) + '<div class="grow"><h3>' + esc(t.name) + '</h3>' +
+      '<div class="muted small">' + s.total + ' Aufgaben' + (ihk ? ' · ' + ihk + ' IHK' : '') + '</div></div></div>' +
+      '<div class="topic-stats"><span class="st ok">' + ICON('check') + s.correct + '</span><span class="st bad">' + ICON('x') + (s.wrong + s.partial) + '</span><span class="st">' + s.open + ' offen</span></div>' +
+      '<div class="topic-actions">' +
+      (t.id !== 'alle' ? '<a class="btn ghost sm" href="#/t/' + c.id + '/' + encodeURIComponent(t.id) + '">' + ICON('list') + 'Liste</a>' : '<span></span>') +
+      '<button class="btn primary sm" data-practice="' + esc(t.id) + '"' + (s.total ? '' : ' disabled') + '>' + ICON('play') + 'Üben</button></div></div>';
   }
 
   function viewTopicList(catId, topicId) {
@@ -371,14 +458,15 @@
     var t = topic(catId, topicId);
     var list = tasksOf(catId, topicId);
     var p = progress();
-    var html = '<nav class="crumbs"><a href="#/">Start</a> › <a href="#/k/' + catId + '">' + esc(c.short) + '</a> › ' + esc(t.name) + '</nav>' +
-      '<h1>' + esc(t.name) + '</h1><div class="task-index">';
+    var ts = stats(list);
+    var html = '<nav class="crumbs"><a href="#/">Übersicht</a>' + ICON('chevronRight') + '<a href="#/k/' + catId + '">' + esc(c.short) + '</a>' + ICON('chevronRight') + '<span>' + esc(t.name) + '</span></nav>' +
+      '<header class="page-head"><div class="grow"><p class="eyebrow">' + esc(c.short) + '</p><h1>' + esc(t.name) + '</h1><p class="muted">' + list.length + ' Aufgaben · ' + ts.correct + ' richtig · ' + ts.open + ' offen</p></div>' + ring(ts.pct, 64) + '</header><div class="task-index">';
     list.forEach(function (task, i) {
       var e = p[task.id];
       var st = e ? e.s : 'open';
-      html += '<button class="card idx-item" data-i="' + i + '"><span class="dot ' + st + '"></span>' +
+      html += '<button class="card idx-item" data-i="' + i + '"><span class="dot ' + st + '"></span><span class="idx-nr">' + (i + 1) + '</span>' +
         '<span class="idx-text">' + esc(task.title || firstLine(task.q)) + '</span>' +
-        (task.exam ? '<span class="badge ihk">' + esc(examName(task.exam)) + '</span>' : '') + '<span class="badge">' + TYPE_LABEL[task.type] + '</span><span class="badge">' + task.points + ' P</span></button>';
+        (task.exam ? '<span class="badge ihk">' + esc(examName(task.exam)) + '</span>' : '') + '<span class="badge">' + TYPE_LABEL[task.type] + '</span><span class="badge pts">' + fmt(task.points) + ' P</span>' + ICON('chevronRight', 'chev') + '</button>';
     });
     html += '</div>';
     app.innerHTML = html;
@@ -405,11 +493,12 @@
     var locked = a.checked && !exam;
     var answeredCount = session.ids.filter(function (x) { return session.answers[x] && (session.answers[x].checked || hasValue(BY_ID[x], session.answers[x])); }).length;
 
+    var sp = Math.round(answeredCount / session.ids.length * 100);
     var html = '<div class="session-head">' +
-      '<a class="btn ghost small-btn" href="' + session.back + '">← Zurück</a>' +
-      '<div class="session-title">' + esc(session.title) + '</div>' +
-      (exam ? '<div class="timer" id="timer">⏱ –</div>' : '<div class="muted small">' + answeredCount + '/' + session.ids.length + ' bearbeitet</div>') +
-      '</div>';
+      '<a class="icon-btn" href="' + session.back + '" title="Zurück" aria-label="Zurück">' + ICON('arrowLeft') + '</a>' +
+      '<div class="session-title"><span class="eyebrow">' + (exam ? 'Prüfungssimulation' : 'Übung') + '</span><strong>' + esc(session.title) + '</strong></div>' +
+      (exam ? '<div class="timer" id="timer">' + ICON('timer') + '<span>–</span></div>' : '<div class="session-count"><strong>' + answeredCount + '</strong> / ' + session.ids.length + '</div>') +
+      '</div><div class="session-progress"><span style="width:' + sp + '%"></span></div>';
 
     html += '<div class="pager">' + session.ids.map(function (x, i) {
       var aa = session.answers[x];
@@ -420,10 +509,10 @@
     }).join('') + '</div>';
 
     html += '<article class="card task">' +
-      '<div class="task-meta"><span class="badge">' + esc(c ? c.short : t.cat) + '</span><span class="badge">' + esc((topic(t.tcat || t.cat, t.topic) || { name: t.topic }).name) + '</span>' +
-      '<span class="badge">' + TYPE_LABEL[t.type] + '</span><span class="badge pts">' + t.points + ' Punkte</span>' +
-      (t.source ? '<span class="badge ihk">' + esc(t.source) + '</span>' : '') +
-      '<span class="spacer"></span><span class="muted small">Aufgabe ' + (session.idx + 1) + ' von ' + session.ids.length + '</span></div>' +
+      '<div class="task-meta"><span class="tag ' + catClass(t.cat) + '">' + esc(c ? c.short : t.cat) + '</span><span class="badge">' + esc((topic(t.tcat || t.cat, t.topic) || { name: t.topic }).name) + '</span>' +
+      '<span class="badge">' + TYPE_LABEL[t.type] + '</span><span class="badge pts">' + fmt(t.points) + ' Punkte</span>' +
+      (t.source ? '<span class="badge ihk">' + ICON('file') + esc(t.source) + '</span>' : '') +
+      '<span class="spacer"></span><span class="task-no">Aufgabe ' + (session.idx + 1) + ' / ' + session.ids.length + '</span></div>' +
       (t.title ? '<h2 class="task-title">' + esc(t.title) + '</h2>' : '') +
       renderContext(t) +
       '<div class="md">' + MD.render(t.q) + '</div>' +
@@ -433,19 +522,19 @@
     html += '</article>';
 
     html += '<div class="actions">' +
-      '<button class="btn ghost" data-act="prev"' + (session.idx === 0 ? ' disabled' : '') + '>← Vorherige</button><span class="spacer"></span>';
+      '<button class="btn ghost" data-act="prev"' + (session.idx === 0 ? ' disabled' : '') + '>' + ICON('arrowLeft') + 'Zurück</button><span class="spacer"></span>';
     if (exam) {
-      html += '<button class="btn ghost" data-act="submit">Prüfung abgeben</button>';
-      html += session.idx < session.ids.length - 1 ? '<button class="btn primary" data-act="next">Weiter →</button>' : '';
+      html += '<button class="btn ghost" data-act="submit">' + ICON('flag') + 'Abgeben</button>';
+      html += session.idx < session.ids.length - 1 ? '<button class="btn primary" data-act="next">Weiter' + ICON('arrowRight') + '</button>' : '';
     } else if (!a.checked) {
-      if (t.type === 'free') html += a.revealed ? '' : '<button class="btn primary" data-act="reveal">Musterlösung zeigen</button>';
-      else html += '<button class="btn primary" data-act="check">Prüfen</button>';
       html += '<button class="btn ghost" data-act="skip">Überspringen</button>';
+      if (t.type === 'free') html += a.revealed ? '' : '<button class="btn primary" data-act="reveal">' + ICON('eye') + 'Musterlösung zeigen</button>';
+      else html += '<button class="btn primary" data-act="check">' + ICON('check') + 'Prüfen</button>';
     } else {
-      html += '<button class="btn ghost" data-act="retry">Nochmal</button>';
-      html += session.idx < session.ids.length - 1 ? '<button class="btn primary" data-act="next">Weiter →</button>' : '<button class="btn primary" data-act="finish">Auswertung</button>';
+      html += '<button class="btn ghost" data-act="retry">' + ICON('repeat') + 'Nochmal</button>';
+      html += session.idx < session.ids.length - 1 ? '<button class="btn primary" data-act="next">Weiter' + ICON('arrowRight') + '</button>' : '<button class="btn primary" data-act="finish">' + ICON('award') + 'Auswertung</button>';
     }
-    html += '</div><p class="muted small center keys">Tastatur: 1–9 Antwort wählen · Enter prüfen/weiter · ←/→ blättern</p>';
+    html += '</div><p class="keys"><kbd>1</kbd>–<kbd>9</kbd> Antwort wählen <kbd>Enter</kbd> prüfen / weiter <kbd>←</kbd><kbd>→</kbd> blättern</p>';
     app.innerHTML = html;
 
     bindAnswer(t, a, locked);
@@ -481,10 +570,10 @@
   function renderContext(t) {
     var h = '';
     if (t.context) {
-      h += '<details class="context"' + (t.contextOpen === false ? '' : ' open') + '><summary>📋 Ausgangssituation</summary><div class="md">' + MD.render(t.context) + '</div></details>';
+      h += '<details class="context"' + (t.contextOpen === false ? '' : ' open') + '><summary>' + ICON('book') + 'Ausgangssituation</summary><div class="md">' + MD.render(t.context) + '</div></details>';
     }
     if (t.pages && t.pages.length) {
-      h += '<details class="context pages"><summary>📄 Originalseite' + (t.pages.length > 1 ? 'n' : '') + ' anzeigen (Diagramme, Tabellen)</summary>' +
+      h += '<details class="context pages"><summary>' + ICON('image') + 'Originalseite' + (t.pages.length > 1 ? 'n' : '') + ' anzeigen <span class="muted">· Diagramme, Tabellen</span></summary>' +
         t.pages.map(function (p) { return '<a href="' + esc(p) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(p) + '" alt="Originalseite"></a>'; }).join('') + '</details>';
     }
     return h;
@@ -492,7 +581,7 @@
 
   function solPages(t) {
     if (!t.solPages || !t.solPages.length) return '';
-    return '<details class="context pages"><summary>📄 Original-Lösungshinweise anzeigen</summary>' +
+    return '<details class="context pages"><summary>' + ICON('image') + 'Original-Lösungshinweise anzeigen</summary>' +
       t.solPages.map(function (p) { return '<a href="' + esc(p) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(p) + '" alt="Lösungsseite"></a>'; }).join('') + '</details>';
   }
 
@@ -508,7 +597,7 @@
     var dis = locked ? ' disabled' : '';
     if (t.type === 'single' || t.type === 'multi') {
       var inputType = t.type === 'single' ? 'radio' : 'checkbox';
-      var h = t.type === 'multi' ? '<p class="hint">Mehrere Antworten können richtig sein.</p>' : '';
+      var h = t.type === 'multi' ? '<p class="hint">' + ICON('info') + 'Mehrere Antworten können richtig sein.</p>' : '';
       h += '<div class="options">';
       a.order.forEach(function (oi, k) {
         var checked = t.type === 'single' ? a.value === oi : a.value.indexOf(oi) >= 0;
@@ -527,11 +616,11 @@
         (t.unit ? '<span class="unit">' + esc(t.unit) + '</span>' : '') + '</div>';
     }
     if (t.type === 'order') {
-      var o = '<p class="hint">Bringe die Elemente in die richtige Reihenfolge (Pfeile oder Ziehen).</p><ol class="order-list">';
+      var o = '<p class="hint">' + ICON('info') + 'Bringe die Elemente in die richtige Reihenfolge – per Pfeil oder Ziehen.</p><ol class="order-list">';
       a.value.forEach(function (ii, pos) {
         var cls = locked ? (ii === pos ? ' opt-ok' : ' opt-bad') : '';
-        o += '<li class="order-item' + cls + '" draggable="' + (!locked) + '" data-pos="' + pos + '"><span class="handle">⠿</span><span class="opt-text">' + MD.inline(t.items[ii]) + '</span>' +
-          (locked ? '' : '<span class="row"><button class="icon-btn" data-up="' + pos + '" aria-label="nach oben">↑</button><button class="icon-btn" data-down="' + pos + '" aria-label="nach unten">↓</button></span>') + '</li>';
+        o += '<li class="order-item' + cls + '" draggable="' + (!locked) + '" data-pos="' + pos + '"><span class="handle">' + ICON('grip') + '</span><span class="opt-text">' + MD.inline(t.items[ii]) + '</span>' +
+          (locked ? '' : '<span class="row"><button class="icon-btn" data-up="' + pos + '" aria-label="nach oben">' + ICON('up') + '</button><button class="icon-btn" data-down="' + pos + '" aria-label="nach unten">' + ICON('down') + '</button></span>') + '</li>';
       });
       return o + '</ol>';
     }
@@ -539,10 +628,10 @@
     var exam = session.mode === 'exam';
     var f = '<textarea id="free" class="free-input' + (t.code ? ' mono' : '') + '" rows="' + (t.code ? 10 : 7) + '" spellcheck="' + (!t.code) + '" placeholder="Deine Lösung (wird nur für dich gespeichert)…"' + (locked ? ' readonly' : '') + '>' + esc(a.value) + '</textarea>';
     if (!exam && a.revealed && !a.checked) {
-      f += '<div class="solution"><h4>Musterlösung</h4><div class="md">' + MD.render(t.solution) + '</div>' +
+      f += '<div class="solution"><h4>' + ICON('book') + 'Musterlösung</h4><div class="md">' + MD.render(t.solution) + '</div>' +
         (t.explanation ? '<div class="md muted">' + MD.render(t.explanation) + '</div>' : '') + solPages(t) +
-        '<p><strong>Wie gut war deine Lösung?</strong></p><div class="row wrap">' +
-        '<button class="btn ok" data-rate="correct">✔ Richtig</button><button class="btn part" data-rate="partial">◐ Teilweise</button><button class="btn bad" data-rate="wrong">✘ Falsch</button></div></div>';
+        '<div class="rate"><strong>Wie gut war deine Lösung?</strong><div class="row wrap">' +
+        '<button class="btn ok" data-rate="correct">' + ICON('check') + 'Richtig</button><button class="btn part" data-rate="partial">' + ICON('half') + 'Teilweise</button><button class="btn bad" data-rate="wrong">' + ICON('x') + 'Falsch</button></div></div></div>';
     }
     return f;
   }
@@ -604,7 +693,7 @@
 
   function renderFeedback(t, a) {
     var r = a.result;
-    var icon = r === 'correct' ? '✔' : r === 'partial' ? '◐' : '✘';
+    var icon = ICON(r === 'correct' ? 'check' : r === 'partial' ? 'half' : 'x');
     var h = '<div class="feedback ' + r + '"><div class="fb-head">' + icon + ' ' + (r === 'correct' ? 'Richtig!' : r === 'partial' ? 'Teilweise richtig' : 'Leider falsch') +
       ' <span class="muted small">(' + pointsFor(t, r) + ' / ' + t.points + ' Punkte)</span></div>';
     if (t.type === 'input' && r !== 'correct') h += '<p>Richtige Antwort: <strong>' + esc(t.answers[0]) + (t.unit ? ' ' + esc(t.unit) : '') + '</strong></p>';
@@ -653,7 +742,7 @@
     var tick = function () {
       var left = session.duration - (Date.now() - session.started) / 1000;
       if (!el) return;
-      el.textContent = '⏱ ' + fmtTime(left);
+      el.querySelector('span').textContent = fmtTime(left);
       el.classList.toggle('warn', left < 300);
       if (left <= 0) { clearInterval(timerHandle); alert('Die Zeit ist abgelaufen. Die Prüfung wird abgegeben.'); finish(); }
     };
@@ -677,23 +766,22 @@
     var note = ihkNote(pct);
     var dur = Math.round(((session.ended || Date.now()) - session.started) / 1000);
 
-    var html = '<nav class="crumbs"><a href="#/">Start</a> › Auswertung</nav>' +
-      '<section class="hero"><div><h1>Auswertung</h1><p class="muted">' + esc(session.title) + ' · Dauer ' + fmtTime(dur) + ' min</p>' +
-      (pending ? '<p class="notice-inline">Bewerte unten noch ' + pending + ' Freitext-Aufgabe(n) selbst, um das Endergebnis zu erhalten.</p>' : '') + '</div>' +
-      '<div class="hero-stat"><div class="big">' + pct + '%</div><div class="muted small">' + fmt(got) + ' / ' + total + ' Punkte</div>' +
-      (exam ? '<div class="grade g' + note.n + '">Note ' + note.n + ' – ' + note.t + '</div>' : '') + '</div></section>' +
-      '<div class="row wrap chips"><span class="chip ok">✔ ' + counts.correct + ' richtig</span><span class="chip part">◐ ' + counts.partial + ' teilweise</span><span class="chip bad">✘ ' + counts.wrong + ' falsch</span>' +
-      (counts.open ? '<span class="chip">○ ' + counts.open + ' übersprungen</span>' : '') + '</div>';
+    var html = '<div class="card result-hero">' + ring(pct, 120, exam ? 'g' + note.n : 'accent') +
+      '<div class="grow"><p class="eyebrow">Auswertung · ' + esc(session.title) + '</p><h1>' + (pct >= 81 ? 'Stark gemacht!' : pct >= 50 ? 'Bestanden – weiter so!' : 'Dranbleiben – das wird!') + '</h1>' +
+      '<p class="muted">' + fmt(got) + ' von ' + fmt(total) + ' Punkten · Dauer ' + fmtTime(dur) + ' min</p>' +
+      (exam ? '<span class="grade g' + note.n + '">Note ' + note.n + ' · ' + note.t + '</span>' : '') +
+      (pending ? '<p class="notice-inline">' + ICON('info') + 'Bewerte unten noch ' + pending + ' Freitext-Aufgabe(n) selbst, um das Endergebnis zu erhalten.</p>' : '') +
+      '<div class="chips"><span class="chip ok">' + ICON('check') + counts.correct + ' richtig</span><span class="chip part">' + ICON('half') + counts.partial + ' teilweise</span><span class="chip bad">' + ICON('x') + counts.wrong + ' falsch</span>' +
+      (counts.open ? '<span class="chip">' + counts.open + ' übersprungen</span>' : '') + '</div>' +
+      '<div class="row wrap"><button class="btn primary" data-act="again"' + (counts.wrong + counts.partial + counts.open ? '' : ' disabled') + '>' + ICON('repeat') + 'Falsche &amp; offene wiederholen</button>' +
+      '<a class="btn ghost" href="' + session.back + '">Zur Übersicht</a></div></div></div>';
 
-    html += '<div class="row wrap"><button class="btn primary" data-act="again"' + (counts.wrong + counts.partial + counts.open ? '' : ' disabled') + '>Falsche &amp; offene wiederholen</button>' +
-      '<a class="btn ghost" href="' + session.back + '">Zur Übersicht</a></div>';
-
-    html += '<h2>Aufgaben im Detail</h2>';
+    html += '<div class="section-head"><h2>Aufgaben im Detail</h2></div>';
     session.ids.forEach(function (id, i) {
       var t = BY_ID[id], a = session.answers[id] || {};
       var r = a.checked ? a.result : 'open';
       html += '<details class="card review ' + r + '"' + (exam && t.type === 'free' && !a.checked ? ' open' : '') + '><summary><span class="dot ' + r + '"></span>' +
-        '<span class="idx-text">' + (i + 1) + '. ' + esc(t.title || firstLine(t.q)) + '</span><span class="badge">' + (a.checked ? fmt(pointsFor(t, a.result)) : '–') + ' / ' + t.points + ' P</span></summary>' +
+        '<span class="idx-nr">' + (i + 1) + '</span><span class="idx-text">' + esc(t.title || firstLine(t.q)) + '</span><span class="badge pts">' + (a.checked ? fmt(pointsFor(t, a.result)) : '–') + ' / ' + fmt(t.points) + ' P</span>' + ICON('down', 'chev') + '</summary>' +
         renderContext(t) + '<div class="md">' + MD.render(t.q) + '</div>' + reviewAnswer(t, a) + '</details>';
     });
     app.innerHTML = html;
@@ -731,7 +819,7 @@
       h += '<ul class="rev-opts">' + t.options.map(function (o, i) {
         var isC = t.type === 'single' ? t.correct === i : t.correct.indexOf(i) >= 0;
         var sel = t.type === 'single' ? a.value === i : (a.value || []).indexOf(i) >= 0;
-        return '<li class="' + (isC ? 'opt-ok' : sel ? 'opt-bad' : '') + '">' + (sel ? '☑ ' : '☐ ') + MD.inline(o) + '</li>';
+        return '<li class="' + (isC ? 'opt-ok' : sel ? 'opt-bad' : '') + '">' + '<span class="box' + (sel ? ' on' : '') + '">' + (sel ? ICON('check') : '') + '</span>' + MD.inline(o) + '</li>';
       }).join('') + '</ul>';
     } else if (t.type === 'input') {
       h += '<p>Deine Antwort: <strong>' + esc(a.value || '–') + '</strong> · Lösung: <strong>' + esc(t.answers[0]) + (t.unit ? ' ' + esc(t.unit) : '') + '</strong></p>';
@@ -742,9 +830,9 @@
         '<h4>Musterlösung</h4><div class="md">' + MD.render(t.solution) + '</div>';
       if (!a.checked) {
         h += '<p><strong>Selbstbewertung:</strong></p><div class="row wrap">' +
-          '<button class="btn ok" data-rate="correct" data-rate-id="' + esc(t.id) + '">✔ Richtig</button>' +
-          '<button class="btn part" data-rate="partial" data-rate-id="' + esc(t.id) + '">◐ Teilweise</button>' +
-          '<button class="btn bad" data-rate="wrong" data-rate-id="' + esc(t.id) + '">✘ Falsch</button></div>';
+          '<button class="btn ok" data-rate="correct" data-rate-id="' + esc(t.id) + '">' + ICON('check') + 'Richtig</button>' +
+          '<button class="btn part" data-rate="partial" data-rate-id="' + esc(t.id) + '">' + ICON('half') + 'Teilweise</button>' +
+          '<button class="btn bad" data-rate="wrong" data-rate-id="' + esc(t.id) + '">' + ICON('x') + 'Falsch</button></div>';
       }
     }
     if (t.explanation) h += '<div class="md explanation">' + MD.render(t.explanation) + '</div>';
@@ -753,15 +841,16 @@
 
   /* ---------------- Statistik ---------------- */
   function viewStats() {
-    var html = '<h1>Statistik</h1>';
     var all = stats(TASKS);
-    html += '<div class="grid three">' +
-      statTile('Bearbeitet', (all.total - all.open) + ' / ' + all.total) +
-      statTile('Richtig', all.correct) +
-      statTile('Zu wiederholen', all.wrong + all.partial) + '</div>';
+    var html = '<header class="page-head"><div><p class="eyebrow">Lernstand</p><h1>Statistik</h1><p class="muted">Fortschritt je Thema, Schwachstellen und Prüfungsrelevanz.</p></div>' + ring(all.pct, 72) + '</header>';
+    html += '<section class="kpis three">' +
+      kpi('layers', 'Bearbeitet', all.total - all.open, 'von ' + all.total) +
+      kpi('check', 'Richtig', all.correct, 'sicher gelöst') +
+      kpi('repeat', 'Zu wiederholen', all.wrong + all.partial, 'falsch oder teilweise') + '</section>';
+    if (EXAMS.length) html += '<div class="section-head"><h2>Prüfungsrelevanz der Themen</h2></div><div class="card relevance">' + relevanceList() + '</div>';
 
     CATS.forEach(function (c) {
-      html += '<h2>' + c.icon + ' ' + esc(c.short) + '</h2><div class="card"><table class="stat-table"><thead><tr><th>Thema</th><th>Aufgaben</th><th>Richtig</th><th>Falsch/teilw.</th><th>Fortschritt</th></tr></thead><tbody>';
+      html += '<div class="section-head"><h2><span class="cat-ico sm ' + catClass(c.id) + '">' + ICON(CAT_ICON[c.id]) + '</span>' + esc(c.name) + '</h2></div><div class="card table-card"><table class="stat-table"><thead><tr><th>Thema</th><th>Aufgaben</th><th>Richtig</th><th>Falsch/teilw.</th><th>Fortschritt</th></tr></thead><tbody>';
       c.topics.forEach(function (t) {
         var s = stats(tasksOf(c.id, t.id));
         var weak = s.total - s.open > 0 && s.pct < 50;
@@ -771,7 +860,7 @@
     });
 
     if (EXAMS.length) {
-      html += '<h2>📄 IHK-Prüfungen</h2><div class="card"><table class="stat-table"><thead><tr><th>Termin</th>' + CATS.map(function (c) { return '<th>' + esc(c.short) + '</th>'; }).join('') + '<th>Gesamt</th></tr></thead><tbody>' +
+      html += '<div class="section-head"><h2>IHK-Prüfungen</h2></div><div class="card table-card"><table class="stat-table"><thead><tr><th>Termin</th>' + CATS.map(function (c) { return '<th>' + esc(c.short) + '</th>'; }).join('') + '<th>Gesamt</th></tr></thead><tbody>' +
         EXAMS.map(function (e) {
           return '<tr><td>' + esc(e.name) + '</td>' + CATS.map(function (c) {
             var l = examTasks(e.id, c.id);
@@ -781,7 +870,7 @@
     }
 
     var hist = store.get(K.history, []);
-    html += '<h2>Prüfungssimulationen</h2>';
+    html += '<div class="section-head"><h2>Prüfungssimulationen</h2></div>';
     if (!hist.length) html += '<p class="muted">Noch keine Prüfungssimulation abgeschlossen.</p>';
     else {
       html += '<div class="card"><table class="stat-table"><thead><tr><th>Datum</th><th>Prüfung</th><th>Aufgaben</th><th>Ergebnis</th><th>Note</th></tr></thead><tbody>' +
@@ -799,8 +888,8 @@
   /* ---------------- Daten / Import ---------------- */
   function viewData() {
     var imported = store.get(K.imported, []);
-    var html = '<h1>Daten &amp; eigene Aufgaben</h1>' +
-      '<div class="card"><h3>📥 Eigene Aufgaben importieren</h3>' +
+    var html = '<header class="page-head"><div><p class="eyebrow">Verwaltung</p><h1>Daten &amp; Import</h1><p class="muted">Eigene Aufgaben einbinden und Lernfortschritt sichern.</p></div></header>' +
+      '<div class="card"><h3 class="card-title">' + ICON('upload') + 'Eigene Aufgaben importieren</h3>' +
       '<p class="muted small">JSON-Datei mit einer Liste von Aufgaben (Format siehe <code>docs/aufgabenformat.md</code>). Aufgaben mit gleicher ID werden ersetzt. ' +
       'Tipp: Lass dir im Claude-Projekt-Chat Aufgaben aus deinen Lernthemen in diesem Format erzeugen.</p>' +
       '<div class="row wrap"><input type="file" id="file" accept=".json,application/json"><span class="muted small">Aktuell importiert: <strong>' + imported.length + '</strong></span></div>' +
@@ -810,12 +899,12 @@
       '<button class="btn ghost" data-act="expTasks"' + (imported.length ? '' : ' disabled') + '>Importierte exportieren</button>' +
       '<button class="btn bad" data-act="delTasks"' + (imported.length ? '' : ' disabled') + '>Importierte löschen</button></div><div id="importMsg"></div></div>';
 
-    html += '<div class="card"><h3>💾 Fortschritt sichern</h3><p class="muted small">Der Fortschritt liegt nur in diesem Browser. Sichere ihn als Datei, um ihn auf einen anderen Rechner zu übertragen.</p>' +
+    html += '<div class="card"><h3 class="card-title">' + ICON('download') + 'Fortschritt sichern</h3><p class="muted small">Der Fortschritt liegt nur in diesem Browser. Sichere ihn als Datei, um ihn auf einen anderen Rechner zu übertragen.</p>' +
       '<div class="row wrap"><button class="btn" data-act="expProg">Fortschritt exportieren</button>' +
       '<label class="btn ghost">Fortschritt importieren<input type="file" id="progFile" accept=".json" hidden></label>' +
       '<button class="btn bad" data-act="reset">Fortschritt zurücksetzen</button></div></div>';
 
-    html += '<div class="card"><h3>📊 Aufgabenbestand</h3><table class="stat-table"><thead><tr><th>Bereich</th>' +
+    html += '<div class="card table-card"><h3 class="card-title">' + ICON('layers') + 'Aufgabenbestand</h3><table class="stat-table"><thead><tr><th>Bereich</th>' +
       Object.keys(TYPE_LABEL).map(function (k) { return '<th>' + TYPE_LABEL[k] + '</th>'; }).join('') + '<th>Summe</th></tr></thead><tbody>' +
       CATS.map(function (c) {
         var l = tasksOf(c.id);
@@ -941,13 +1030,22 @@
     else if (e.key === 'ArrowLeft') move(-1);
   });
 
+  function curTheme() {
+    return document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }
+  function paintThemeBtn() {
+    var b = document.getElementById('themeToggle');
+    if (!b) return;
+    var dark = curTheme() === 'dark';
+    b.innerHTML = '<span class="ico">' + ICON(dark ? 'sun' : 'moon') + '</span><span class="nav-label">' + (dark ? 'Helles Design' : 'Dunkles Design') + '</span>';
+  }
   document.getElementById('themeToggle').addEventListener('click', function () {
-    var root = document.documentElement;
-    var cur = root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    var next = cur === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
+    var next = curTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
     store.set(K.theme, next);
+    paintThemeBtn();
   });
+  paintThemeBtn();
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     navigator.serviceWorker.register('sw.js').catch(function () {});

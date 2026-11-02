@@ -1,9 +1,10 @@
 /* Service Worker: macht die App offline nutzbar (Network-first, Cache als Offline-Fallback). */
-const CACHE = 'ap2-trainer-v1';
+const CACHE = 'ap2-trainer-v2';
 const FILES = [
   './', './index.html', './manifest.webmanifest',
-  './css/style.css', './js/markdown.js', './js/app.js',
+  './css/style.css', './js/icons.js', './js/markdown.js', './js/app.js',
   './data/categories.js', './data/tasks-ga1.js', './data/tasks-ga2.js', './data/tasks-wiso.js',
+  './fonts/inter-latin-wght-normal.woff2', './fonts/inter-latin-ext-wght-normal.woff2', './fonts/jetbrains-mono-latin-wght-normal.woff2',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'
 ];
 
