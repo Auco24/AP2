@@ -1,0 +1,16 @@
+{
+  "name": "AP2 Trainer – Fachinformatiker Anwendungsentwicklung",
+  "short_name": "AP2 Trainer",
+  "description": "Prüfungsvorbereitung für die AP2 FIAE: Aufgaben nach Prüfungsbereich und Thema üben.",
+  "lang": "de",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#2b59c3",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

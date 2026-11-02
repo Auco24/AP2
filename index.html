@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AP2 Trainer – FIAE</title>
+  <meta name="description" content="Prüfungsvorbereitung AP2 Fachinformatiker Anwendungsentwicklung">
+  <meta name="theme-color" content="#2b59c3">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    try { var t = localStorage.getItem('ap2.theme'); if (t) document.documentElement.setAttribute('data-theme', JSON.parse(t)); } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <img src="icons/icon.svg" alt="" width="28" height="28">
+      <span>AP2 Trainer <small>FIAE</small></span>
+    </a>
+    <nav class="topnav">
+      <a href="#/" data-nav="home">Start</a>
+      <a href="#/statistik" data-nav="statistik">Statistik</a>
+      <a href="#/daten" data-nav="daten">Daten</a>
+      <button id="themeToggle" class="icon-btn" title="Hell/Dunkel umschalten" aria-label="Design umschalten">🌓</button>
+    </nav>
+  </header>
+
+  <main id="app" class="container" aria-live="polite"></main>
+
+  <footer class="footer container">
+    Eigene Übungsaufgaben im Stil der AP2 – keine Original-IHK-Aufgaben. Fortschritt wird nur lokal im Browser gespeichert.
+  </footer>
+
+  <!-- Daten -->
+  <script src="data/categories.js"></script>
+  <script src="data/tasks-ga1.js"></script>
+  <script src="data/tasks-ga2.js"></script>
+  <script src="data/tasks-wiso.js"></script>
+  <!-- App -->
+  <script src="js/markdown.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
