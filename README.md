@@ -35,6 +35,23 @@ Die App erscheint dann im Startmenü/auf dem Desktop, läuft in einem eigenen Fe
 - **Fortschritt exportieren/importieren** (z. B. für einen anderen Rechner)
 - Hell/Dunkel-Modus, Tastaturbedienung (1–9, Enter, ←/→), mobiltauglich
 
+## Eigene IHK-Prüfungen (nur lokal)
+
+Original-Prüfungen (Aufgaben, Lösungen, Seitenbilder) können im Ordner `data/ihk/` abgelegt werden:
+
+```
+data/ihk/ihk-aufgaben.js   Liste der Termine + Lader
+data/ihk/S2023.js …        Aufgaben je Prüfungstermin (Felder wie im Aufgabenformat, zusätzlich
+                           exam, source, context, pages, solPages, tcat)
+data/ihk/img/…             Seitenbilder der Aufgaben und Lösungshinweise
+```
+
+Die App zeigt diese Aufgaben automatisch auf der Startseite unter **„IHK-Prüfungen nach Termin“**, ordnet sie den Themen zu
+und bietet einen Quellen-Filter (alle / nur Übungsaufgaben / nur IHK).
+
+> ⚠️ IHK-/ZPA-Prüfungen und Lösungen sind urheberrechtlich geschützt. `data/ihk/` und `_pruefungen/` sind daher per
+> `.gitignore` vom Repository ausgeschlossen – nur für den persönlichen Gebrauch.
+
 ## Projektstruktur
 
 ```
@@ -61,3 +78,4 @@ Neue eingebaute Aufgaben: einfach in `data/tasks-*.js` ergänzen (gleiches Forma
 - **Выбор:** раздел (GA1 / GA2 / WiSo) → тема → задания. Режимы: тренировка с объяснениями, симуляция экзамена с таймером и оценкой по шкале IHK, повтор ошибок.
 - **Свои задания:** раздел «Daten» → импорт JSON (формат в `docs/aufgabenformat.md`; там же шаблон запроса, чтобы Claude в чате проекта генерировал задания в нужном формате).
 - Прогресс хранится только в браузере — его можно экспортировать в файл.
+- **Экзамены IHK прошлых лет** лежат только локально в `data/ihk/` (не попадают на GitHub из-за авторских прав) — храни архив с ними у себя.

@@ -48,7 +48,8 @@ window.AP2_CATEGORIES = [
       { id: 'mitbestimmung', name: 'Mitbestimmung & Tarifrecht' },
       { id: 'sozial', name: 'Sozialversicherung & Entgelt' },
       { id: 'unternehmen', name: 'Unternehmen & Rechtsformen' },
-      { id: 'vertrag', name: 'Rechtsgeschäfte & Verträge' }
+      { id: 'vertrag', name: 'Rechtsgeschäfte & Verträge' },
+      { id: 'wirtschaft', name: 'Volkswirtschaft & Markt' }
     ]
   }
 ];

@@ -21,7 +21,7 @@
     });
     s = esc(s)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
+      .replace(/(^|[\s(>])\*([^*\s][^*]*?)\*(?=[\s.,;:!?)<]|$)/g, '$1<em>$2</em>');
     return s.replace(/\u0000(\d+)\u0000/g, function (_, i) {
       return '<code>' + esc(codes[+i]) + '</code>';
     });

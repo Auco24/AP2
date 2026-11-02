@@ -18,25 +18,53 @@
     del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  var K = { progress: 'ap2.progress', imported: 'ap2.imported', session: 'ap2.session', theme: 'ap2.theme', history: 'ap2.history' };
+  var K = { progress: 'ap2.progress', imported: 'ap2.imported', session: 'ap2.session', theme: 'ap2.theme', history: 'ap2.history', src: 'ap2.src' };
+  var EXAMS = window.AP2_EXAMS || [];
+  var SRC_LABEL = { alle: 'Alle Aufgaben', uebung: 'Nur Übungsaufgaben', ihk: 'Nur IHK-Prüfungen' };
+  var SRC = store.get(K.src, 'alle');
 
   var TYPE_LABEL = { single: 'Single Choice', multi: 'Multiple Choice', input: 'Eingabe', order: 'Reihenfolge', free: 'Freitext' };
   var STATUS_LABEL = { correct: 'richtig', partial: 'teilweise', wrong: 'falsch' };
 
   /* ---------------- Daten ---------------- */
-  var TASKS = [];
+  var ALL = [];   // alle Aufgaben
+  var TASKS = []; // nach Quelle (SRC) gefiltert
   var BY_ID = {};
 
   function loadTasks() {
     var imported = store.get(K.imported, []);
-    TASKS = [];
+    ALL = [];
     BY_ID = {};
-    (window.AP2_TASKS || []).concat(imported).forEach(function (t) {
+    (window.AP2_TASKS || []).concat(window.AP2_IHK_TASKS || [], imported).forEach(function (t) {
       if (!t || !t.id || BY_ID[t.id]) return;
       if (!t.points) t.points = defaultPoints(t);
-      TASKS.push(t);
+      ALL.push(t);
       BY_ID[t.id] = t;
     });
+    applySrc();
+  }
+
+  function applySrc() {
+    TASKS = ALL.filter(function (t) {
+      return SRC === 'alle' || (SRC === 'ihk' ? !!t.exam : !t.exam);
+    });
+  }
+
+  function srcSelect() {
+    if (!EXAMS.length) return '';
+    return '<label class="small src-select">Quelle <select id="srcSel">' + Object.keys(SRC_LABEL).map(function (k) {
+      return '<option value="' + k + '"' + (k === SRC ? ' selected' : '') + '>' + SRC_LABEL[k] + '</option>';
+    }).join('') + '</select></label>';
+  }
+
+  function bindSrc() {
+    var el = document.getElementById('srcSel');
+    if (el) el.addEventListener('change', function () { SRC = el.value; store.set(K.src, SRC); applySrc(); route(); });
+  }
+
+  function exam(id) { return EXAMS.filter(function (e) { return e.id === id; })[0]; }
+  function examTasks(examId, catId) {
+    return ALL.filter(function (t) { return t.exam === examId && (!catId || t.cat === catId); });
   }
 
   function defaultPoints(t) { return t.type === 'free' ? 6 : t.type === 'single' ? 2 : 3; }
@@ -50,7 +78,7 @@
   }
   function tasksOf(catId, topicId) {
     return TASKS.filter(function (t) {
-      return (!catId || t.cat === catId) && (!topicId || topicId === 'alle' || t.topic === topicId);
+      return (!catId || (t.tcat || t.cat) === catId) && (!topicId || topicId === 'alle' || t.topic === topicId);
     });
   }
 
@@ -221,7 +249,7 @@
         '<span class="row"><a class="btn" href="#/session">Fortsetzen</a><button class="btn ghost" data-act="drop">Verwerfen</button></span></div>';
     }
 
-    html += '<div class="quick">' +
+    html += '<div class="quick">' + srcSelect() +
       '<button class="btn" data-act="mix">🎲 Zufallsmix (10)</button>' +
       '<button class="btn" data-act="wrong"' + (wrongIds.length ? '' : ' disabled') + '>🔁 Fehler wiederholen (' + wrongIds.length + ')</button>' +
       '<button class="btn" data-act="open">🆕 Nur neue Aufgaben</button>' +
@@ -237,7 +265,37 @@
         '</a>';
     });
     html += '</div>';
+
+    if (EXAMS.length) {
+      html += '<h2>IHK-Prüfungen nach Termin</h2><p class="muted small">Aufgaben in Originalreihenfolge üben oder als Prüfung mit Zeitlimit simulieren. Alle Aufgaben sind zusätzlich den Themen oben zugeordnet.</p><div class="grid exams">';
+      EXAMS.forEach(function (e) {
+        var s = stats(examTasks(e.id));
+        html += '<div class="card exam-card"><div class="row space"><h3>📄 ' + esc(e.name) + '</h3><span class="muted small">' + s.pct + '%</span></div>' + bar(s) + '<div class="exam-parts">';
+        CATS.forEach(function (c) {
+          var list = examTasks(e.id, c.id);
+          if (!list.length) return;
+          var cs = stats(list);
+          html += '<div class="exam-part"><span><strong>' + esc(c.short) + '</strong> <span class="muted small">' + list.length + ' Aufg. · ' + cs.pct + '%</span></span>' +
+            '<span class="row"><button class="btn small-btn" data-ex="' + e.id + '" data-excat="' + c.id + '">Üben</button>' +
+            '<button class="btn ghost small-btn" data-ex="' + e.id + '" data-excat="' + c.id + '" data-exmode="exam" title="Prüfungssimulation mit Zeitlimit">⏱ ' + (c.examMinutes) + ' min</button></span></div>';
+        });
+        html += '</div>' + (e.note ? '<p class="muted small">' + esc(e.note) + '</p>' : '') + '</div>';
+      });
+      html += '</div>';
+    }
     app.innerHTML = html;
+    bindSrc();
+    app.querySelectorAll('[data-ex]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var e = exam(b.getAttribute('data-ex')), c = cat(b.getAttribute('data-excat'));
+        var isExam = b.getAttribute('data-exmode') === 'exam';
+        startSession({
+          ids: examTasks(e.id, c.id).map(function (t) { return t.id; }),
+          mode: isExam ? 'exam' : 'practice', duration: isExam ? c.examMinutes * 60 : 0,
+          title: e.name + ' · ' + c.short, back: '#/'
+        });
+      });
+    });
 
     on('[data-act="drop"]', function () { if (confirm('Laufende Sitzung verwerfen?')) { session = null; store.del(K.session); route(); } });
     on('[data-act="mix"]', function () {
@@ -265,7 +323,7 @@
       '<button class="btn primary" data-act="exam">Prüfung starten</button></div></div>';
 
     html += '<div class="row space"><h2>Themen</h2>' +
-      '<label class="small"><input type="checkbox" id="onlyOpen"> nur offene &amp; falsche</label></div>';
+      '<span class="row wrap">' + srcSelect() + '<label class="small"><input type="checkbox" id="onlyOpen"> nur offene &amp; falsche</label></span></div>';
     html += '<div class="topic-list">';
     html += topicRow(c, { id: 'alle', name: 'Alle Themen gemischt' }, all, true);
     c.topics.forEach(function (t) { html += topicRow(c, t, tasksOf(catId, t.id)); });
@@ -276,6 +334,7 @@
     Object.keys(extra).forEach(function (tid) { html += topicRow(c, { id: tid, name: tid + ' (importiert)' }, tasksOf(catId, tid)); });
     html += '</div>';
     app.innerHTML = html;
+    bindSrc();
 
     on('[data-act="exam"]', function () {
       var n = +document.getElementById('exN').value;
@@ -319,7 +378,7 @@
       var st = e ? e.s : 'open';
       html += '<button class="card idx-item" data-i="' + i + '"><span class="dot ' + st + '"></span>' +
         '<span class="idx-text">' + esc(task.title || firstLine(task.q)) + '</span>' +
-        '<span class="badge">' + TYPE_LABEL[task.type] + '</span><span class="badge">' + task.points + ' P</span></button>';
+        (task.exam ? '<span class="badge ihk">' + esc(examName(task.exam)) + '</span>' : '') + '<span class="badge">' + TYPE_LABEL[task.type] + '</span><span class="badge">' + task.points + ' P</span></button>';
     });
     html += '</div>';
     app.innerHTML = html;
@@ -361,10 +420,12 @@
     }).join('') + '</div>';
 
     html += '<article class="card task">' +
-      '<div class="task-meta"><span class="badge">' + esc(c ? c.short : t.cat) + '</span><span class="badge">' + esc(topic(t.cat, t.topic).name) + '</span>' +
+      '<div class="task-meta"><span class="badge">' + esc(c ? c.short : t.cat) + '</span><span class="badge">' + esc((topic(t.tcat || t.cat, t.topic) || { name: t.topic }).name) + '</span>' +
       '<span class="badge">' + TYPE_LABEL[t.type] + '</span><span class="badge pts">' + t.points + ' Punkte</span>' +
+      (t.source ? '<span class="badge ihk">' + esc(t.source) + '</span>' : '') +
       '<span class="spacer"></span><span class="muted small">Aufgabe ' + (session.idx + 1) + ' von ' + session.ids.length + '</span></div>' +
       (t.title ? '<h2 class="task-title">' + esc(t.title) + '</h2>' : '') +
+      renderContext(t) +
       '<div class="md">' + MD.render(t.q) + '</div>' +
       '<div class="answer">' + renderAnswer(t, a, locked) + '</div>';
 
@@ -377,7 +438,7 @@
       html += '<button class="btn ghost" data-act="submit">Prüfung abgeben</button>';
       html += session.idx < session.ids.length - 1 ? '<button class="btn primary" data-act="next">Weiter →</button>' : '';
     } else if (!a.checked) {
-      if (t.type === 'free') html += '<button class="btn primary" data-act="reveal">Musterlösung zeigen</button>';
+      if (t.type === 'free') html += a.revealed ? '' : '<button class="btn primary" data-act="reveal">Musterlösung zeigen</button>';
       else html += '<button class="btn primary" data-act="check">Prüfen</button>';
       html += '<button class="btn ghost" data-act="skip">Überspringen</button>';
     } else {
@@ -413,6 +474,26 @@
     });
 
     if (exam) startTimer();
+  }
+
+  function examName(id) { var e = exam(id); return e ? e.name : id; }
+
+  function renderContext(t) {
+    var h = '';
+    if (t.context) {
+      h += '<details class="context"' + (t.contextOpen === false ? '' : ' open') + '><summary>📋 Ausgangssituation</summary><div class="md">' + MD.render(t.context) + '</div></details>';
+    }
+    if (t.pages && t.pages.length) {
+      h += '<details class="context pages"><summary>📄 Originalseite' + (t.pages.length > 1 ? 'n' : '') + ' anzeigen (Diagramme, Tabellen)</summary>' +
+        t.pages.map(function (p) { return '<a href="' + esc(p) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(p) + '" alt="Originalseite"></a>'; }).join('') + '</details>';
+    }
+    return h;
+  }
+
+  function solPages(t) {
+    if (!t.solPages || !t.solPages.length) return '';
+    return '<details class="context pages"><summary>📄 Original-Lösungshinweise anzeigen</summary>' +
+      t.solPages.map(function (p) { return '<a href="' + esc(p) + '" target="_blank" rel="noopener"><img loading="lazy" src="' + esc(p) + '" alt="Lösungsseite"></a>'; }).join('') + '</details>';
   }
 
   function hasValue(t, a) {
@@ -459,7 +540,7 @@
     var f = '<textarea id="free" class="free-input' + (t.code ? ' mono' : '') + '" rows="' + (t.code ? 10 : 7) + '" spellcheck="' + (!t.code) + '" placeholder="Deine Lösung (wird nur für dich gespeichert)…"' + (locked ? ' readonly' : '') + '>' + esc(a.value) + '</textarea>';
     if (!exam && a.revealed && !a.checked) {
       f += '<div class="solution"><h4>Musterlösung</h4><div class="md">' + MD.render(t.solution) + '</div>' +
-        (t.explanation ? '<div class="md muted">' + MD.render(t.explanation) + '</div>' : '') +
+        (t.explanation ? '<div class="md muted">' + MD.render(t.explanation) + '</div>' : '') + solPages(t) +
         '<p><strong>Wie gut war deine Lösung?</strong></p><div class="row wrap">' +
         '<button class="btn ok" data-rate="correct">✔ Richtig</button><button class="btn part" data-rate="partial">◐ Teilweise</button><button class="btn bad" data-rate="wrong">✘ Falsch</button></div></div>';
     }
@@ -530,7 +611,7 @@
     if (t.type === 'order' && r !== 'correct') h += '<p>Richtige Reihenfolge:</p><ol>' + t.items.map(function (x) { return '<li>' + MD.inline(x) + '</li>'; }).join('') + '</ol>';
     if (t.type === 'free') h += '<div class="md"><h4>Musterlösung</h4>' + MD.render(t.solution) + '</div>';
     if (t.explanation) h += '<div class="md explanation">' + MD.render(t.explanation) + '</div>';
-    return h + '</div>';
+    return h + solPages(t) + '</div>';
   }
 
   function check(t, a) {
@@ -613,7 +694,7 @@
       var r = a.checked ? a.result : 'open';
       html += '<details class="card review ' + r + '"' + (exam && t.type === 'free' && !a.checked ? ' open' : '') + '><summary><span class="dot ' + r + '"></span>' +
         '<span class="idx-text">' + (i + 1) + '. ' + esc(t.title || firstLine(t.q)) + '</span><span class="badge">' + (a.checked ? fmt(pointsFor(t, a.result)) : '–') + ' / ' + t.points + ' P</span></summary>' +
-        '<div class="md">' + MD.render(t.q) + '</div>' + reviewAnswer(t, a) + '</details>';
+        renderContext(t) + '<div class="md">' + MD.render(t.q) + '</div>' + reviewAnswer(t, a) + '</details>';
     });
     app.innerHTML = html;
 
@@ -667,7 +748,7 @@
       }
     }
     if (t.explanation) h += '<div class="md explanation">' + MD.render(t.explanation) + '</div>';
-    return h + '</div>';
+    return h + solPages(t) + '</div>';
   }
 
   /* ---------------- Statistik ---------------- */
@@ -688,6 +769,16 @@
       });
       html += '</tbody></table></div>';
     });
+
+    if (EXAMS.length) {
+      html += '<h2>📄 IHK-Prüfungen</h2><div class="card"><table class="stat-table"><thead><tr><th>Termin</th>' + CATS.map(function (c) { return '<th>' + esc(c.short) + '</th>'; }).join('') + '<th>Gesamt</th></tr></thead><tbody>' +
+        EXAMS.map(function (e) {
+          return '<tr><td>' + esc(e.name) + '</td>' + CATS.map(function (c) {
+            var l = examTasks(e.id, c.id);
+            return '<td>' + (l.length ? stats(l).pct + '% <span class="muted small">(' + l.length + ')</span>' : '–') + '</td>';
+          }).join('') + '<td class="bar-cell">' + bar(stats(examTasks(e.id))) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
 
     var hist = store.get(K.history, []);
     html += '<h2>Prüfungssimulationen</h2>';
@@ -863,6 +954,10 @@
   }
 
   loadTasks();
+  if (EXAMS.length) {
+    var foot = document.querySelector('.footer');
+    if (foot) foot.textContent = 'Übungsaufgaben im Stil der AP2 + lokal eingebundene IHK-Prüfungen (' + EXAMS.length + ' Termine, nur für den persönlichen Gebrauch). Fortschritt wird nur lokal im Browser gespeichert.';
+  }
   if (session && !session.ids.every(function (id) { return BY_ID[id]; })) { session = null; store.del(K.session); }
   window.addEventListener('hashchange', route);
   route();

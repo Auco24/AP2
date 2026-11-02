@@ -289,3 +289,16 @@ details > summary.small { cursor: pointer; margin: 10px 0; color: var(--primary)
   .keys { display: none; }
   .bar-cell { display: none; }
 }
+
+/* IHK-Prüfungen */
+.badge.ihk { background: var(--part-soft); color: var(--part); }
+.src-select select { margin-left: 4px; }
+.quick { align-items: center; }
+.exam-card h3 { margin: 0; }
+.exam-card .bar { margin: 6px 0 10px; }
+.exam-parts { display: flex; flex-direction: column; gap: 6px; }
+.exam-part { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; border-top: 1px solid var(--border); }
+.context { margin: 6px 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.context summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.context[open] summary { margin-bottom: 6px; }
+.context.pages img { display: block; max-width: 100%; margin: 8px 0; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
